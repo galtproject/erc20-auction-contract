@@ -14,14 +14,13 @@
     "cli-table": "^0.3.1",
     "ganache-cli": "^6.9.1",
     "ganache-core": "^2.10.2",
-    "ganache-core-coverage": "https://github.com/OpenZeppelin/ganache-core-coverage/releases/download/2.5.3-coverage/ganache-core-coverage-2.5.3.tgz",
     "lodash": "^4.17.15",
     "mocha": "^8.0.1",
     "solhint": "^3.0.0",
     "solhint-plugin-prettier": "0.0.4",
-    "solidity-coverage": "github:rotcivegaf/solidity-coverage#5875f5b7bc74d447f3312c9c0e9fc7814b482477",
+    "solidity-coverage": "^0.7.5",
     "truffle": "5.1.29",
-    "web3": "1.2.3"
+    "web3": "1.2.9"
   },
   "engines": {
     "node": "^10.15.3"
@@ -35,6 +34,7 @@
   "repository": "https://github.com/galtproject/solidity-bootstrap",
   "scripts": {
     "test": "mocha --exit --recursive test --timeout 10000",
+    "ttest": "truffle test --network test",
     "compile": "truffle compile",
     "deploy": "truffle migrate --network local",
     "coverage": "SOLIDITY_COVERAGE=yes scripts/coverage.sh",

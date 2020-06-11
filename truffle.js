@@ -1,5 +1,3 @@
-const coverage = process.env.OZ_TEST_ENV_COVERAGE !== undefined;
-
 const config = {
   networks: {
     local: {
@@ -8,10 +6,20 @@ const config = {
       gasLimit: 9700000,
       network_id: '*',
     },
-    coverage: {
+    soliditycoverage: {
       host: '127.0.0.1',
       port: 8555,
       gasLimit: 9600000,
+      network_id: '*',
+    },
+    test: {
+      // https://github.com/trufflesuite/ganache-core#usage
+      provider() {
+        // eslint-disable-next-line global-require
+        const { provider } = require('@openzeppelin/test-environment');
+        return provider;
+      },
+      skipDryRun: true,
       network_id: '*',
     },
   },
@@ -20,13 +28,14 @@ const config = {
       version: 'native',
       settings: {
         optimizer: {
-          enabled: !coverage,
-          runs: coverage ? 0 : 200,
+          enabled: true,
+          runs: 200,
         },
       },
-      evmVersion: coverage ? 'petersburg' : 'istanbul',
+      evmVersion: 'istanbul',
     },
   },
+  plugins: ['solidity-coverage'],
 };
 
 module.exports = config;
