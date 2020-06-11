@@ -10,15 +10,15 @@ const testFolder = './build/contracts/';
 
 const contracts = [];
 
-fs.readdirSync(testFolder).forEach(file => {
+fs.readdirSync(testFolder).forEach((file) => {
   contracts.push([file.substring(0, file.length - 5), getSize(file)]);
 });
 
-contracts.sort(function(a, b) {
+contracts.sort(function (a, b) {
   return a[1] - b[1];
 });
 
-contracts.forEach(value => {
+contracts.forEach((value) => {
   table.push(value);
 });
 

@@ -8,6 +8,7 @@
   "devDependencies": {
     "@galtproject/eslint-config-galt": "github:galtproject/eslint-config-galt#1e45e18b5e6849f6a88036a151f62d60889e9396",
     "@openzeppelin/contracts": "2.5.1",
+    "@openzeppelin/contract-loader": "^0.6.1",
     "@openzeppelin/test-environment": "^0.1.4",
     "@truffle/debug-utils": "^4.1.6",
     "chai": "^4.2.0",
@@ -38,12 +39,13 @@
     "compile": "truffle compile",
     "deploy": "truffle migrate --network local",
     "coverage": "SOLIDITY_COVERAGE=yes scripts/coverage.sh",
-    "format:js": "prettier --write \"./**/*.js\"",
+    "format:js": "eslint . --fix",
     "format:sol": "prettier --write \"contracts/**/*.sol\"",
     "lint:js": "eslint .",
     "lint:sol": "solhint --max-warnings 0 \"contracts/**/*.sol\""
   },
   "author": "",
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {
+  }
 }
