@@ -23,7 +23,7 @@ describe('ERC20Auction', () => {
 
   before(async function () {
     token = await ERC20Mintable.new();
-    await token.mint(alice, ether(200));
+    await token.mint(alice, ether(2000000));
 
     startAfter = 30;
     withdrawalFee = 12;
@@ -96,6 +96,147 @@ describe('ERC20Auction', () => {
           auction.depositEthForPeriod(0, { value: 10, from: alice }),
           'ERC20Auction: Period ID from the past'
         );
+      });
+    });
+
+    describe('#depositEth()', () => {
+      it('should allow depositing for the current period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await auction.depositEth({ value: 8, from: alice });
+
+        const res = await auction.periods(1);
+        assert.equal(res.totalEthDeposits, 8);
+        assert.equal(res.totalErc20Deposits, 0);
+      });
+
+      it('should allow depositing using a fallback function', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await web3.eth.sendTransaction({ value: 8, from: alice, to: auction.address });
+
+        const res = await auction.periods(1);
+        assert.equal(res.totalEthDeposits, 8);
+        assert.equal(res.totalErc20Deposits, 0);
+        assert.equal(await auction.getUserEthDeposit(1, alice), 8);
+      });
+
+      it('should accumulate multiple deposits for the same period', async function () {
+        await increaseTime(periodLength * 3);
+
+        assert.equal(await auction.getCurrentPeriodId(), 2);
+
+        await auction.depositEth({ value: 8, from: alice });
+        let res = await auction.periods(2);
+        assert.equal(res.totalEthDeposits, 8);
+        assert.equal(await auction.getUserEthDeposit(2, alice), 8);
+
+        await auction.depositEth({ value: 3, from: alice });
+        res = await auction.periods(2);
+        assert.equal(res.totalEthDeposits, 11);
+        assert.equal(await auction.getUserEthDeposit(2, alice), 11);
+      });
+    });
+
+    describe('#depositErc20ForPeriod()', () => {
+      it('should allow depositing for the 0th period', async function () {
+        await increaseTime(40);
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(0, ether(12), { from: alice });
+      });
+
+      it('should allow depositing for the current period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await token.approve(auction.address, ether(8), { from: alice });
+        await auction.depositErc20ForPeriod(1, ether(8), { from: alice });
+
+        const res = await auction.periods(1);
+        assert.equal(res.totalErc20Deposits, ether(8));
+        assert.equal(res.totalEthDeposits, 0);
+      });
+
+      it('should accumulate multiple deposits for the same period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+
+        await token.approve(auction.address, ether(8), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(8), { from: alice });
+        let res = await auction.periods(2);
+        assert.equal(res.totalErc20Deposits, ether(8));
+        assert.equal(await auction.getUserErc20Deposit(2, alice), ether(8));
+
+        await token.approve(auction.address, ether(3), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(3), { from: alice });
+        res = await auction.periods(2);
+        assert.equal(res.totalErc20Deposits, ether(11));
+        assert.equal(await auction.getUserErc20Deposit(2, alice), ether(11));
+      });
+
+      it('should allow depositing for a future period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await token.approve(auction.address, ether(8), { from: alice });
+        await auction.depositErc20ForPeriod(3, ether(8), { from: alice });
+
+        const res = await auction.periods(3);
+        assert.equal(res.totalErc20Deposits, ether(8));
+        assert.equal(res.totalEthDeposits, 0);
+      });
+
+      it('should deny depositing along with ETHs', async function () {
+        await assertRevert(auction.depositErc20ForPeriod(3, ether(8), { value: 1, from: alice }));
+      });
+
+      it('should deny depositing for previous periods', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await token.approve(auction.address, ether(3), { from: alice });
+        await assertRevert(
+          auction.depositErc20ForPeriod(0, ether(8), { from: alice }),
+          'ERC20Auction: Period ID from the past'
+        );
+      });
+    });
+
+    describe('#depositErc20()', () => {
+      it('should allow depositing for the current period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await token.approve(auction.address, ether(8), { from: alice });
+        await auction.depositErc20(ether(8), { from: alice });
+
+        const res = await auction.periods(1);
+        assert.equal(res.totalErc20Deposits, ether(8));
+      });
+
+      it('should accumulate multiple deposits for the same period', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+
+        await token.approve(auction.address, ether(8), { from: alice });
+        await auction.depositErc20(ether(8), { from: alice });
+        let res = await auction.periods(1);
+        assert.equal(res.totalErc20Deposits, ether(8));
+        assert.equal(await auction.getUserErc20Deposit(1, alice), ether(8));
+
+        await token.approve(auction.address, ether(3), { from: alice });
+        await auction.depositErc20(ether(3), { from: alice });
+        res = await auction.periods(1);
+        assert.equal(res.totalErc20Deposits, ether(11));
+        assert.equal(await auction.getUserErc20Deposit(1, alice), ether(11));
+      });
+
+      it('should deny depositing along with ETHs', async function () {
+        await assertRevert(auction.depositErc20(ether(8), { value: 1, from: alice }));
       });
     });
   });
