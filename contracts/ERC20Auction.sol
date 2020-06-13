@@ -13,10 +13,28 @@ contract ERC20Auction is Ownable {
   uint256 public constant HUNDRED_PCT = 100 ether;
 
   // EVENTS
-  event ClaimEthForPeriod(uint256 indexed periodId, address indexed msgSender, uint256 net, uint256 fee);
-  event ClaimErc20ForPeriod(uint256 indexed periodId, address indexed msgSender, uint256 net, uint256 fee);
-  event DepositEthForPeriod(uint256 indexed periodId, address indexed msgSender, uint256 amount);
-  event DepositErc20ForPeriod(uint256 indexed periodId, address indexed msgSender, uint256 amount);
+  event ClaimEthForPeriod(
+    uint256 indexed periodId,
+    address indexed msgSender,
+    uint256 net,
+    uint256 fee
+  );
+  event ClaimErc20ForPeriod(
+    uint256 indexed periodId,
+    address indexed msgSender,
+    uint256 net,
+    uint256 fee
+  );
+  event DepositEthForPeriod(
+    uint256 indexed periodId,
+    address indexed msgSender,
+    uint256 amount
+  );
+  event DepositErc20ForPeriod(
+    uint256 indexed periodId,
+    address indexed msgSender,
+    uint256 amount
+  );
   event WithdrawOwnerEthReward(address to, uint256 amount);
   event WithdrawOwnerErc20Reward(address to, uint256 amount);
 
@@ -24,10 +42,8 @@ contract ERC20Auction is Ownable {
   struct Period {
     uint256 totalEthDeposits;
     uint256 totalErc20Deposits;
-
     mapping(address => uint256) userEthDeposit;
     mapping(address => uint256) userErc20Deposit;
-
     mapping(address => bool) userEthPayoutClaimed;
     mapping(address => bool) userErc20PayoutClaimed;
   }
@@ -86,7 +102,10 @@ contract ERC20Auction is Ownable {
 
   // USER INTERFACE
   function depositEthForPeriod(uint256 _periodId) public payable {
-    require(_periodId >= getCurrentPeriodId(), "ERC20Auction: Period ID from the past");
+    require(
+      _periodId >= getCurrentPeriodId(),
+      "ERC20Auction: Period ID from the past"
+    );
 
     Period storage p = periods[_periodId];
     uint256 amount = msg.value;
@@ -104,12 +123,15 @@ contract ERC20Auction is Ownable {
     depositEthForPeriod(getCurrentPeriodId());
   }
 
-  function () external payable {
+  function() external payable {
     depositEth();
   }
 
   function depositErc20ForPeriod(uint256 _periodId, uint256 _amount) public {
-    require(_periodId >= getCurrentPeriodId(), "ERC20Auction: Period ID from the past");
+    require(
+      _periodId >= getCurrentPeriodId(),
+      "ERC20Auction: Period ID from the past"
+    );
 
     Period storage p = periods[_periodId];
     address msgSender = msg.sender;
@@ -129,14 +151,23 @@ contract ERC20Auction is Ownable {
   }
 
   function claimEthForPeriod(uint256 _periodId) public {
-    require(_periodId < getCurrentPeriodId(), "ERC20Auction: Period not finished yet");
+    require(
+      _periodId < getCurrentPeriodId(),
+      "ERC20Auction: Period not finished yet"
+    );
 
     Period storage p = periods[_periodId];
     address msgSender = msg.sender;
 
-    require(p.userEthPayoutClaimed[msgSender] == false, "ERC20Auction: Already claimed");
+    require(
+      p.userEthPayoutClaimed[msgSender] == false,
+      "ERC20Auction: Already claimed"
+    );
     require(p.totalEthDeposits > 0, "ERC20Auction: Missing ETH deposits");
-    require(p.userErc20Deposit[msgSender] > 0, "ERC20Auction: Missing the user ERC20 deposit");
+    require(
+      p.userErc20Deposit[msgSender] > 0,
+      "ERC20Auction: Missing the user ERC20 deposit"
+    );
 
     (uint256 net, uint256 fee) = calculateEthReturn(_periodId, msgSender);
 
@@ -146,14 +177,23 @@ contract ERC20Auction is Ownable {
   }
 
   function claimErc20ForPeriod(uint256 _periodId) public {
-    require(_periodId < getCurrentPeriodId(), "ERC20Auction: Period not finished yet");
+    require(
+      _periodId < getCurrentPeriodId(),
+      "ERC20Auction: Period not finished yet"
+    );
 
     Period storage p = periods[_periodId];
     address msgSender = msg.sender;
 
-    require(p.userErc20PayoutClaimed[msgSender] == false, "ERC20Auction: Already claimed");
+    require(
+      p.userErc20PayoutClaimed[msgSender] == false,
+      "ERC20Auction: Already claimed"
+    );
     require(p.totalErc20Deposits > 0, "ERC20Auction: Missing ERC20 deposits");
-    require(p.userEthDeposit[msgSender] > 0, "ERC20Auction: Missing the user ETH deposit");
+    require(
+      p.userEthDeposit[msgSender] > 0,
+      "ERC20Auction: Missing the user ETH deposit"
+    );
 
     (uint256 net, uint256 fee) = calculateErc20Return(_periodId, msgSender);
 
@@ -183,49 +223,87 @@ contract ERC20Auction is Ownable {
     return (_periodId.mul(periodLength)).add(genesisTimestamp);
   }
 
-  function calculateWithdrawalFee(uint256 _amount) public view returns (uint256) {
-    return _amount * withdrawalFee / HUNDRED_PCT;
+  function calculateWithdrawalFee(uint256 _amount)
+    public
+    view
+    returns (uint256)
+  {
+    return (_amount * withdrawalFee) / HUNDRED_PCT;
   }
 
-  function calculateGrossEthReturn(uint256 _periodId, address _user) public view returns (uint256) {
+  function calculateGrossEthReturn(uint256 _periodId, address _user)
+    public
+    view
+    returns (uint256)
+  {
     Period storage p = periods[_periodId];
 
-    return p.totalEthDeposits * p.userErc20Deposit[_user] / p.totalErc20Deposits;
+    return
+      (p.totalEthDeposits * p.userErc20Deposit[_user]) / p.totalErc20Deposits;
   }
 
-  function calculateGrossErc20Return(uint256 _periodId, address _user) public view returns (uint256) {
+  function calculateGrossErc20Return(uint256 _periodId, address _user)
+    public
+    view
+    returns (uint256)
+  {
     Period storage p = periods[_periodId];
 
-    return p.totalErc20Deposits * p.userEthDeposit[_user] / p.totalEthDeposits;
+    return
+      (p.totalErc20Deposits * p.userEthDeposit[_user]) / p.totalEthDeposits;
   }
 
-  function calculateEthReturn(uint256 _periodId, address _user) public view returns (uint256 net, uint256 fee) {
+  function calculateEthReturn(uint256 _periodId, address _user)
+    public
+    view
+    returns (uint256 net, uint256 fee)
+  {
     uint256 gross = calculateGrossEthReturn(_periodId, _user);
 
     fee = calculateWithdrawalFee(gross);
     net = gross - fee;
   }
 
-  function calculateErc20Return(uint256 _periodId, address _user) public view returns (uint256 net, uint256 fee) {
+  function calculateErc20Return(uint256 _periodId, address _user)
+    public
+    view
+    returns (uint256 net, uint256 fee)
+  {
     uint256 gross = calculateGrossErc20Return(_periodId, _user);
 
     fee = calculateWithdrawalFee(gross);
     net = gross - fee;
   }
 
-  function getUserEthDeposit(uint256 _periodId, address _user) external view returns(uint256) {
+  function getUserEthDeposit(uint256 _periodId, address _user)
+    external
+    view
+    returns (uint256)
+  {
     return periods[_periodId].userEthDeposit[_user];
   }
 
-  function getUserErc20Deposit(uint256 _periodId, address _user) external view returns(uint256) {
+  function getUserErc20Deposit(uint256 _periodId, address _user)
+    external
+    view
+    returns (uint256)
+  {
     return periods[_periodId].userErc20Deposit[_user];
   }
 
-  function getUserEthPayoutClaimed(uint256 _periodId, address _user) external view returns(bool) {
+  function getUserEthPayoutClaimed(uint256 _periodId, address _user)
+    external
+    view
+    returns (bool)
+  {
     return periods[_periodId].userEthPayoutClaimed[_user];
   }
 
-  function getUserErc20PayoutClaimed(uint256 _periodId, address _user) external view returns(bool) {
+  function getUserErc20PayoutClaimed(uint256 _periodId, address _user)
+    external
+    view
+    returns (bool)
+  {
     return periods[_periodId].userErc20PayoutClaimed[_user];
   }
 }
