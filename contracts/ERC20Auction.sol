@@ -37,7 +37,7 @@ contract ERC20Auction is Ownable {
   // in seconds
   uint256 public periodLength;
   // 100% == 100 ether
-  uint256 public withdrawFee;
+  uint256 public withdrawalFee;
   IERC20 public erc20Token;
 
   uint256 public ownerEthReward;
@@ -50,13 +50,13 @@ contract ERC20Auction is Ownable {
     // can be changed later:
     uint256 _genesisTimestamp,
     uint256 _periodLength,
-    uint256 _withdrawFee,
+    uint256 _withdrawalFee,
     address _erc20Token
   ) public {
-    require(_withdrawFee < 100 ether, "ERC20Auction: ");
+    require(_withdrawalFee < 100 ether, "ERC20Auction: ");
     genesisTimestamp = _genesisTimestamp;
     periodLength = _periodLength;
-    withdrawFee = _withdrawFee;
+    withdrawalFee = _withdrawalFee;
 
     erc20Token = IERC20(_erc20Token);
   }
@@ -183,8 +183,8 @@ contract ERC20Auction is Ownable {
     return (_periodId.mul(periodLength)).add(genesisTimestamp);
   }
 
-  function calculateWithdrawFee(uint256 _amount) public view returns (uint256) {
-    return _amount * withdrawFee / HUNDRED_PCT;
+  function calculateWithdrawalFee(uint256 _amount) public view returns (uint256) {
+    return _amount * withdrawalFee / HUNDRED_PCT;
   }
 
   function calculateGrossEthReturn(uint256 _periodId, address _user) public view returns (uint256) {
@@ -202,14 +202,30 @@ contract ERC20Auction is Ownable {
   function calculateEthReturn(uint256 _periodId, address _user) public view returns (uint256 net, uint256 fee) {
     uint256 gross = calculateGrossEthReturn(_periodId, _user);
 
-    fee = calculateWithdrawFee(gross);
+    fee = calculateWithdrawalFee(gross);
     net = gross - fee;
   }
 
   function calculateErc20Return(uint256 _periodId, address _user) public view returns (uint256 net, uint256 fee) {
     uint256 gross = calculateGrossErc20Return(_periodId, _user);
 
-    fee = calculateWithdrawFee(gross);
+    fee = calculateWithdrawalFee(gross);
     net = gross - fee;
+  }
+
+  function getUserEthDeposit(uint256 _periodId, address _user) external view returns(uint256) {
+    return periods[_periodId].userEthDeposit[_user];
+  }
+
+  function getUserErc20Deposit(uint256 _periodId, address _user) external view returns(uint256) {
+    return periods[_periodId].userErc20Deposit[_user];
+  }
+
+  function getUserEthPayoutClaimed(uint256 _periodId, address _user) external view returns(bool) {
+    return periods[_periodId].userEthPayoutClaimed[_user];
+  }
+
+  function getUserErc20PayoutClaimed(uint256 _periodId, address _user) external view returns(bool) {
+    return periods[_periodId].userErc20PayoutClaimed[_user];
   }
 }
