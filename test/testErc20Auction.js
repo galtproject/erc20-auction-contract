@@ -3,7 +3,15 @@ const { accounts, defaultSender } = require('@openzeppelin/test-environment');
 const { assert } = require('chai');
 const { contract } = require('./twrapper');
 // eslint-disable-next-line import/order
-const { ether, now, assertRevert, increaseTime, int } = require('@galtproject/solidity-test-chest')(web3);
+const {
+  ether,
+  now,
+  assertRevert,
+  increaseTime,
+  int,
+  assertErc20BalanceChanged,
+  assertEthBalanceChanged,
+} = require('@galtproject/solidity-test-chest')(web3);
 
 const ERC20Mintable = contract.fromArtifact('ERC20Mintable');
 const ERC20Auction = contract.fromArtifact('ERC20Auction');
@@ -11,8 +19,16 @@ const ERC20Auction = contract.fromArtifact('ERC20Auction');
 ERC20Mintable.numberFormat = 'String';
 ERC20Auction.numberFormat = 'String';
 
+function assertEthBalanceIncreased(balanceBefore, balanceAfter, expectedValue) {
+  return assertEthBalanceChanged(balanceBefore, balanceAfter, expectedValue);
+}
+
+function assertEthBalanceDecreased(balanceBefore, balanceAfter, expectedValue) {
+  return assertEthBalanceChanged(balanceBefore, balanceAfter, `-${expectedValue}`);
+}
+
 describe('ERC20Auction', () => {
-  const [alice] = accounts;
+  const [alice, bob, charlie] = accounts;
 
   let auction;
   let token;
@@ -237,6 +253,67 @@ describe('ERC20Auction', () => {
 
       it('should deny depositing along with ETHs', async function () {
         await assertRevert(auction.depositErc20(ether(8), { value: 1, from: alice }));
+      });
+    });
+
+    describe('#claimEthForPeriod()/ #claimErc20ForPeriod', () => {
+      beforeEach(async function () {
+        await increaseTime(40);
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(12), { from: alice });
+        await auction.depositEthForPeriod(2, { value: ether(24), from: bob });
+        await increaseTime(periodLength * 2);
+      });
+
+      it('should allow a user with ERC20 deposit claiming ETH reward', async function () {
+        await increaseTime(periodLength);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        const aliceBalanceBefore = await web3.eth.getBalance(alice);
+        await auction.claimEthForPeriod(2, { from: alice });
+        const aliceBalanceAfter = await web3.eth.getBalance(alice);
+
+        assertEthBalanceIncreased(aliceBalanceBefore, aliceBalanceAfter, ether(24));
+      });
+
+      it('should deny a user with ERC20 deposit claiming a reward for the current period', async function () {
+        assert.equal(await auction.getCurrentPeriodId(), 2);
+
+        await assertRevert(auction.claimEthForPeriod(2, { from: alice }), 'ERC20Auction: Period not finished yet');
+      });
+
+      it('should deny a user with ERC20 deposit claiming a reward for a future period', async function () {
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(4, ether(12), { from: alice });
+        await auction.depositEthForPeriod(4, { value: ether(24), from: bob });
+        assert.equal(await auction.getCurrentPeriodId(), 2);
+
+        await assertRevert(auction.claimEthForPeriod(4, { from: alice }), 'ERC20Auction: Period not finished yet');
+      });
+
+      it('should deny a user with ERC20 deposit claiming a reward twice', async function () {
+        await increaseTime(periodLength);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        await auction.claimEthForPeriod(2, { from: alice });
+        await assertRevert(auction.claimEthForPeriod(2, { from: alice }), 'ERC20Auction: Already claimed');
+      });
+
+      it('should deny a user with ERC20 deposit claiming a reward when missing ETH deposits', async function () {
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(4, ether(12), { from: alice });
+        await increaseTime(periodLength * 3);
+        assert.equal(await auction.getCurrentPeriodId(), 5);
+
+        await assertRevert(auction.claimEthForPeriod(4, { from: alice }), 'ERC20Auction: Missing ETH deposits.');
+      });
+
+      it('should deny a user with no deposit claiming reward for a period', async function () {
+        await increaseTime(periodLength);
+        await assertRevert(
+          auction.claimEthForPeriod(2, { from: charlie }),
+          'ERC20Auction: Missing the user ERC20 deposit'
+        );
       });
     });
   });

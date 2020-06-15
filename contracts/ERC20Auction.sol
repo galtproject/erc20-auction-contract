@@ -157,7 +157,7 @@ contract ERC20Auction is Ownable {
     );
 
     Period storage p = periods[_periodId];
-    address msgSender = msg.sender;
+    address payable msgSender = msg.sender;
 
     require(
       p.userEthPayoutClaimed[msgSender] == false,
@@ -172,6 +172,10 @@ contract ERC20Auction is Ownable {
     (uint256 net, uint256 fee) = calculateEthReturn(_periodId, msgSender);
 
     p.userEthPayoutClaimed[msgSender] = true;
+
+    msgSender.transfer(net);
+    // ownerEthReward += fee
+    ownerEthReward = ownerErc20Reward.add(fee);
 
     emit ClaimEthForPeriod(_periodId, msgSender, net, fee);
   }
@@ -198,6 +202,11 @@ contract ERC20Auction is Ownable {
     (uint256 net, uint256 fee) = calculateErc20Return(_periodId, msgSender);
 
     p.userErc20PayoutClaimed[msgSender] = true;
+
+    erc20Token.transfer(msgSender, net);
+
+    // ownerErc20Reward += fee
+    ownerErc20Reward = ownerErc20Reward.add(fee);
 
     emit ClaimErc20ForPeriod(_periodId, msgSender, net, fee);
   }
