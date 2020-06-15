@@ -93,7 +93,7 @@ contract ERC20Auction is Ownable {
     uint256 amount = ownerErc20Reward;
     require(amount > 0, "ERC20Auction: There is no ERC20 reward yet");
 
-    ownerEthReward = 0;
+    ownerErc20Reward = 0;
 
     emit WithdrawOwnerErc20Reward(_to, amount);
 
@@ -173,9 +173,10 @@ contract ERC20Auction is Ownable {
 
     p.userEthPayoutClaimed[msgSender] = true;
 
-    msgSender.transfer(net);
     // ownerEthReward += fee
-    ownerEthReward = ownerErc20Reward.add(fee);
+    ownerEthReward = ownerEthReward.add(fee);
+
+    msgSender.transfer(net);
 
     emit ClaimEthForPeriod(_periodId, msgSender, net, fee);
   }
@@ -203,10 +204,10 @@ contract ERC20Auction is Ownable {
 
     p.userErc20PayoutClaimed[msgSender] = true;
 
-    erc20Token.transfer(msgSender, net);
-
     // ownerErc20Reward += fee
     ownerErc20Reward = ownerErc20Reward.add(fee);
+
+    erc20Token.transfer(msgSender, net);
 
     emit ClaimErc20ForPeriod(_periodId, msgSender, net, fee);
   }

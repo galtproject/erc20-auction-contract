@@ -1,6 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 const { accounts, defaultSender } = require('@openzeppelin/test-environment');
 const { assert } = require('chai');
+// eslint-disable-next-line import/order
 const { contract } = require('./twrapper');
 // eslint-disable-next-line import/order
 const {
@@ -11,6 +12,7 @@ const {
   int,
   assertErc20BalanceChanged,
   assertEthBalanceChanged,
+  // eslint-disable-next-line import/order
 } = require('@galtproject/solidity-test-chest')(web3);
 
 const { BN } = web3.utils;
@@ -25,16 +27,12 @@ function assertEthBalanceIncreased(balanceBefore, balanceAfter, expectedValue) {
   return assertEthBalanceChanged(balanceBefore, balanceAfter, expectedValue);
 }
 
-function assertEthBalanceDecreased(balanceBefore, balanceAfter, expectedValue) {
-  return assertEthBalanceChanged(balanceBefore, balanceAfter, `-${expectedValue}`);
-}
-
 function assertErc20BalanceIncreased(balanceBefore, balanceAfter, expectedValue) {
   return assertErc20BalanceChanged(balanceBefore, balanceAfter, expectedValue);
 }
 
 describe('ERC20Auction', () => {
-  const [alice, bob, charlie] = accounts;
+  const [owner, beneficiary, alice, bob, charlie] = accounts;
 
   let auction;
   let token;
@@ -49,6 +47,7 @@ describe('ERC20Auction', () => {
     token = await ERC20Mintable.new();
     await token.mint(alice, ether(2000000));
     await token.mint(bob, ether(2000000));
+    await token.mint(charlie, ether(2000000));
 
     startAfter = 30;
     withdrawalFee = ether(12);
@@ -58,7 +57,7 @@ describe('ERC20Auction', () => {
 
   beforeEach(async function () {
     genesisTimestamp = (await now()) + startAfter;
-    auction = await ERC20Auction.new(genesisTimestamp, periodLength, withdrawalFee, token.address);
+    auction = await ERC20Auction.new(genesisTimestamp, periodLength, withdrawalFee, token.address, { from: owner });
   });
 
   it('should store constructor arguments', async function () {
@@ -66,7 +65,88 @@ describe('ERC20Auction', () => {
     assert.equal(await auction.periodLength(), periodLength);
     assert.equal(await auction.withdrawalFee(), withdrawalFee);
     assert.equal(await auction.erc20Token(), token.address);
-    assert.equal(await auction.owner(), defaultSender);
+    assert.equal(await auction.owner(), owner);
+  });
+
+  describe('Owner Interface', () => {
+    describe('reward claiming', () => {
+      beforeEach(async function () {
+        await increaseTime(40);
+        // total ERC20 deposit - 70
+        await token.approve(auction.address, ether(20), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(20), { from: alice });
+        await token.approve(auction.address, ether(30), { from: bob });
+        await auction.depositErc20ForPeriod(2, ether(30), { from: bob });
+        await token.approve(auction.address, ether(20), { from: charlie });
+        await auction.depositErc20ForPeriod(2, ether(20), { from: charlie });
+
+        // total ETH deposit - 30
+        await auction.depositEthForPeriod(2, { value: ether(24), from: bob });
+        await auction.depositEthForPeriod(2, { value: ether(6), from: charlie });
+
+        await increaseTime(periodLength * 3);
+
+        await auction.claimEthForPeriod(2, { from: alice });
+        await auction.claimEthForPeriod(2, { from: bob });
+        await auction.claimEthForPeriod(2, { from: charlie });
+        await auction.claimErc20ForPeriod(2, { from: bob });
+        await auction.claimErc20ForPeriod(2, { from: charlie });
+      });
+
+      describe('withdrawOwnerEthReward()', () => {
+        it('should transfer all ETH owner reward to a sepecified beneficiary', async function () {
+          // an error due two floor roundings, 1 wei is stuck on the contract
+          const expectedOwnerEthReward = new BN('3599999999999999999');
+
+          assert.equal(await auction.ownerEthReward(), expectedOwnerEthReward.toString());
+
+          const beneficiaryBalanceBefore = await web3.eth.getBalance(beneficiary);
+          await auction.withdrawOwnerEthReward(beneficiary, { from: owner });
+          const beneficiaryBalanceAfter = await web3.eth.getBalance(beneficiary);
+
+          assert.equal(await auction.ownerEthReward(), 0);
+
+          assertErc20BalanceIncreased(
+            beneficiaryBalanceBefore,
+            beneficiaryBalanceAfter,
+            expectedOwnerEthReward.toString(10)
+          );
+        });
+
+        it('should deny non owner claiming ETH reward', async function () {
+          await assertRevert(
+            auction.withdrawOwnerEthReward(beneficiary, { from: alice }),
+            ' Ownable: caller is not the owner'
+          );
+        });
+      });
+
+      describe('withdrawOwnerEthReward()', () => {
+        it('should transfer all ERC20 owner reward to a specified beneficiary', async function () {
+          const totalERC20 = new BN(ether('70'));
+
+          // no errors due floor roundings
+          const expectedOwnerERC20Reward = totalERC20.mul(withdrawalFeeBN).div(hundredPctBN);
+
+          assert.equal(await auction.ownerErc20Reward(), expectedOwnerERC20Reward.toString());
+
+          const beneficiaryBalanceBefore = await token.balanceOf(beneficiary);
+          await auction.withdrawOwnerErc20Reward(beneficiary, { from: owner });
+          const beneficiaryBalanceAfter = await token.balanceOf(beneficiary);
+
+          assert.equal(await auction.ownerErc20Reward(), 0);
+
+          assertErc20BalanceIncreased(beneficiaryBalanceBefore, beneficiaryBalanceAfter, expectedOwnerERC20Reward);
+        });
+
+        it('should deny non owner claiming ERC20 reward', async function () {
+          await assertRevert(
+            auction.withdrawOwnerErc20Reward(beneficiary, { from: alice }),
+            ' Ownable: caller is not the owner'
+          );
+        });
+      });
+    });
   });
 
   describe('User Interface', () => {
