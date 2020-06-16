@@ -147,6 +147,22 @@ describe('ERC20Auction', () => {
         });
       });
     });
+
+    describe('stopping a contract', () => {
+      it('should allow an owner stopping the contract', async function () {
+        await auction.stop({ from: owner });
+        assert.equal(await auction.stopped(), true);
+      });
+
+      it('should deny an owner stopping the contract twice', async function () {
+        await auction.stop({ from: owner });
+        await assertRevert(auction.stop({ from: owner }), 'ERC20Auction: The contract is stopped');
+      });
+
+      it('should deny non-owner stopping the contract twice', async function () {
+        await assertRevert(auction.stop({ from: alice }), 'Ownable: caller is not the owner');
+      });
+    });
   });
 
   describe('User Interface', () => {
@@ -203,6 +219,14 @@ describe('ERC20Auction', () => {
           'ERC20Auction: Period ID from the past'
         );
       });
+
+      it('should deny depositing if the contract is stopped', async function () {
+        await auction.stop({ from: owner });
+        await assertRevert(
+          auction.depositEthForPeriod(0, { value: 10, from: alice }),
+          'ERC20Auction: The contract is stopped'
+        );
+      });
     });
 
     describe('#depositEth()', () => {
@@ -243,6 +267,12 @@ describe('ERC20Auction', () => {
         res = await auction.periods(2);
         assert.equal(res.totalEthDeposits, 11);
         assert.equal(await auction.getUserEthDeposit(2, alice), 11);
+      });
+
+      it('should deny depositing if the contract is stopped', async function () {
+        await increaseTime(periodLength * 3);
+        await auction.stop({ from: owner });
+        await assertRevert(auction.depositEth({ value: 10, from: alice }), 'ERC20Auction: The contract is stopped');
       });
     });
 
@@ -309,6 +339,16 @@ describe('ERC20Auction', () => {
           'ERC20Auction: Period ID from the past'
         );
       });
+
+      it('should deny depositing if the contract is stopped', async function () {
+        await increaseTime(periodLength);
+        await auction.stop({ from: owner });
+        await token.approve(auction.address, ether(3), { from: alice });
+        await assertRevert(
+          auction.depositErc20ForPeriod(2, ether(3), { from: alice }),
+          'ERC20Auction: The contract is stopped'
+        );
+      });
     });
 
     describe('#depositErc20()', () => {
@@ -343,6 +383,13 @@ describe('ERC20Auction', () => {
 
       it('should deny depositing along with ETHs', async function () {
         await assertRevert(auction.depositErc20(ether(8), { value: 1, from: alice }));
+      });
+
+      it('should deny depositing if the contract is stopped', async function () {
+        await increaseTime(periodLength);
+        await auction.stop({ from: owner });
+        await token.approve(auction.address, ether(3), { from: alice });
+        await assertRevert(auction.depositErc20(ether(3), { from: alice }), 'ERC20Auction: The contract is stopped');
       });
     });
 
@@ -418,6 +465,12 @@ describe('ERC20Auction', () => {
           'ERC20Auction: Missing the user ERC20 deposit'
         );
       });
+
+      it('should deny claiming when stopped', async function () {
+        await increaseTime(periodLength);
+        await auction.stop({ from: owner });
+        await assertRevert(auction.claimEthForPeriod(2, { from: alice }), 'ERC20Auction: The contract is stopped');
+      });
     });
 
     describe('#claimErc20ForPeriod()', () => {
@@ -489,6 +542,174 @@ describe('ERC20Auction', () => {
         await assertRevert(
           auction.claimErc20ForPeriod(2, { from: charlie }),
           'ERC20Auction: Missing the user ETH deposit'
+        );
+      });
+
+      it('should deny claiming when stopped', async function () {
+        await increaseTime(periodLength);
+        await auction.stop({ from: owner });
+        await assertRevert(auction.claimErc20ForPeriod(2, { from: bob }), 'ERC20Auction: The contract is stopped');
+      });
+    });
+
+    describe('#withdrawEthForPeriod', () => {
+      beforeEach(async function () {
+        await increaseTime(40);
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(12), { from: alice });
+        await auction.depositEthForPeriod(2, { value: ether(24), from: bob });
+        await increaseTime(periodLength);
+      });
+
+      it('should allow withdrawing eth when the stopped period in the past', async function () {
+        await increaseTime(periodLength * 2);
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        assert.equal(await auction.getUserEthDeposit(2, bob), ether(24));
+        assert.equal(await auction.getPeriodTotalEthDeposits(2), ether(24));
+
+        assert.equal(await auction.isUserErc20PayoutClaimed(2, bob), false);
+        assert.equal(await auction.isUserEthDepositWithdrawn(2, bob), false);
+
+        const bobBalanceBefore = await web3.eth.getBalance(bob);
+        await auction.withdrawEthDepositForPeriod(2, { from: bob });
+        const bobBalanceAfter = await web3.eth.getBalance(bob);
+
+        assert.equal(await auction.getUserEthDeposit(2, bob), 0);
+        assert.equal(await auction.getPeriodTotalEthDeposits(2), 0);
+
+        assert.equal(await auction.isUserErc20PayoutClaimed(2, bob), false);
+        assert.equal(await auction.isUserEthDepositWithdrawn(2, bob), true);
+
+        assertEthBalanceIncreased(bobBalanceBefore, bobBalanceAfter, ether(24));
+      });
+
+      it('should allow withdrawing eth when the stopped period in the future', async function () {
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await auction.withdrawEthDepositForPeriod(2, { from: bob });
+      });
+
+      it('should deny withdrawing eth if there is no eth deposit', async function () {
+        await auction.stop({ from: owner });
+        await assertRevert(
+          auction.withdrawEthDepositForPeriod(2, { from: charlie }),
+          'ERC20Auction: Missing user ETH deposit'
+        );
+      });
+
+      it('should deny withdrawing eth if a reward was claimed', async function () {
+        await increaseTime(periodLength * 2);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+        await auction.claimErc20ForPeriod(2, { from: bob });
+
+        await auction.stop({ from: owner });
+        await assertRevert(
+          auction.withdrawEthDepositForPeriod(2, { from: bob }),
+          'ERC20Auction: ERC20 reward was already claimed'
+        );
+      });
+
+      it('should deny withdrawing eth twice', async function () {
+        await increaseTime(periodLength * 2);
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+        await auction.withdrawEthDepositForPeriod(2, { from: bob });
+        await assertRevert(
+          auction.withdrawEthDepositForPeriod(2, { from: bob }),
+          'ERC20Auction: ETH deposit was already withdrawn'
+        );
+      });
+
+      it('should deny withdrawing eth if not stopped', async function () {
+        await increaseTime(periodLength * 2);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        await assertRevert(
+          auction.withdrawEthDepositForPeriod(2, { from: bob }),
+          'ERC20Auction: The contract should be stopped'
+        );
+      });
+    });
+
+    describe('#withdrawErc20ForPeriod', () => {
+      beforeEach(async function () {
+        await increaseTime(40);
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(12), { from: alice });
+        await auction.depositEthForPeriod(2, { value: ether(24), from: bob });
+        await increaseTime(periodLength);
+      });
+
+      it('should allow withdrawing erc20 when the stopped period in the past', async function () {
+        await increaseTime(periodLength * 2);
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        assert.equal(await auction.getUserErc20Deposit(2, alice), ether(12));
+        assert.equal(await auction.getPeriodTotalErc20Deposits(2), ether(12));
+
+        assert.equal(await auction.isUserEthPayoutClaimed(2, alice), false);
+        assert.equal(await auction.isUserErc20DepositWithdrawn(2, alice), false);
+
+        const aliceBalanceBefore = await token.balanceOf(alice);
+        await auction.withdrawErc20DepositForPeriod(2, { from: alice });
+        const aliceBalanceAfter = await token.balanceOf(alice);
+
+        assert.equal(await auction.getUserErc20Deposit(2, alice), 0);
+        assert.equal(await auction.getPeriodTotalErc20Deposits(2), 0);
+
+        assert.equal(await auction.isUserEthPayoutClaimed(2, alice), false);
+        assert.equal(await auction.isUserErc20DepositWithdrawn(2, alice), true);
+
+        assertErc20BalanceIncreased(aliceBalanceBefore, aliceBalanceAfter, ether(12));
+      });
+
+      it('should allow withdrawing erc20 when the stopped period in the future', async function () {
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await auction.withdrawErc20DepositForPeriod(2, { from: alice });
+      });
+
+      it('should deny withdrawing erc20 if there is no eth deposit', async function () {
+        await auction.stop({ from: owner });
+        await assertRevert(
+          auction.withdrawErc20DepositForPeriod(2, { from: charlie }),
+          'ERC20Auction: Missing user ERC20 deposit'
+        );
+      });
+
+      it('should deny withdrawing erc20 if a reward was claimed', async function () {
+        await increaseTime(periodLength * 2);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+        await auction.claimEthForPeriod(2, { from: alice });
+
+        await auction.stop({ from: owner });
+        await assertRevert(
+          auction.withdrawErc20DepositForPeriod(2, { from: alice }),
+          'ERC20Auction: ETH reward was already claimed'
+        );
+      });
+
+      it('should deny withdrawing erc20 twice', async function () {
+        await increaseTime(periodLength * 2);
+        await auction.stop({ from: owner });
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+        await auction.withdrawErc20DepositForPeriod(2, { from: alice });
+        await assertRevert(
+          auction.withdrawErc20DepositForPeriod(2, { from: alice }),
+          'ERC20Auction: ERC20 deposit was already withdrawn'
+        );
+      });
+
+      it('should deny withdrawing eth if not stopped', async function () {
+        await increaseTime(periodLength * 2);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        await assertRevert(
+          auction.withdrawErc20DepositForPeriod(2, { from: alice }),
+          'ERC20Auction: The contract should be stopped'
         );
       });
     });
