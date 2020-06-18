@@ -185,7 +185,75 @@ contract ERC20Auction is Ownable {
     depositErc20ForPeriod(getCurrentPeriodId(), _amount);
   }
 
-  function claimEthForPeriod(uint256 _periodId) external notStopped {
+  function withdrawEthDepositForPeriod(uint256 _periodId) external {
+    Period storage p = periods[_periodId];
+    address payable msgSender = msg.sender;
+
+    require(
+      canWithdrawStopped(_periodId) || canWithdrawNoErc20Deposit(_periodId),
+      "ERC20Auction: Neither stopped nor 0 ERC20 deposit for the period"
+    );
+
+    require(
+      p.userErc20PayoutClaimed[msgSender] == false,
+      "ERC20Auction: ERC20 reward was already claimed"
+    );
+
+    require(
+      p.userEthDepositWithdrawn[msgSender] == false,
+      "ERC20Auction: ETH deposit was already withdrawn"
+    );
+
+    uint256 amount = p.userEthDeposit[msgSender];
+
+    require(amount > 0, "ERC20Auction: Missing user ETH deposit");
+    p.userEthDeposit[msgSender] = 0;
+
+    // p.totalEthDeposits -= _amount
+    p.totalEthDeposits = p.totalEthDeposits.sub(amount);
+
+    p.userEthDepositWithdrawn[msgSender] = true;
+
+    msgSender.transfer(amount);
+
+    emit WithdrawEthDepositForPeriod(_periodId, msgSender, amount);
+  }
+
+  function withdrawErc20DepositForPeriod(uint256 _periodId) external {
+    Period storage p = periods[_periodId];
+    address payable msgSender = msg.sender;
+
+    require(
+      canWithdrawStopped(_periodId) || canWithdrawNoEthDeposit(_periodId),
+      "ERC20Auction: Neither stopped nor 0 ETH deposit for the period"
+    );
+
+    require(
+      p.userEthPayoutClaimed[msgSender] == false,
+      "ERC20Auction: ETH reward was already claimed"
+    );
+
+    require(
+      p.userErc20DepositWithdrawn[msgSender] == false,
+      "ERC20Auction: ERC20 deposit was already withdrawn"
+    );
+
+    uint256 amount = p.userErc20Deposit[msgSender];
+
+    require(amount > 0, "ERC20Auction: Missing user ERC20 deposit");
+    p.userErc20Deposit[msgSender] = 0;
+
+    // p.totalErc20Deposits -= _amount
+    p.totalErc20Deposits = p.totalErc20Deposits.sub(amount);
+
+    p.userErc20DepositWithdrawn[msgSender] = true;
+
+    erc20Token.transfer(msg.sender, amount);
+
+    emit WithdrawErc20DepositForPeriod(_periodId, msgSender, amount);
+  }
+
+  function claimEthForPeriod(uint256 _periodId) external {
     require(
       _periodId < getCurrentPeriodId(),
       "ERC20Auction: Period not finished yet"
@@ -216,68 +284,7 @@ contract ERC20Auction is Ownable {
     emit ClaimEthForPeriod(_periodId, msgSender, net, fee);
   }
 
-  function withdrawEthDepositForPeriod(uint256 _periodId) external onlyStopped {
-    Period storage p = periods[_periodId];
-    address payable msgSender = msg.sender;
-
-    require(
-      p.userErc20PayoutClaimed[msgSender] == false,
-      "ERC20Auction: ERC20 reward was already claimed"
-    );
-
-    require(
-      p.userEthDepositWithdrawn[msgSender] == false,
-      "ERC20Auction: ETH deposit was already withdrawn"
-    );
-
-    uint256 amount = p.userEthDeposit[msgSender];
-
-    require(amount > 0, "ERC20Auction: Missing user ETH deposit");
-    p.userEthDeposit[msgSender] = 0;
-
-    // p.totalEthDeposits -= _amount
-    p.totalEthDeposits = p.totalEthDeposits.sub(amount);
-
-    p.userEthDepositWithdrawn[msgSender] = true;
-
-    msgSender.transfer(amount);
-
-    emit WithdrawEthDepositForPeriod(_periodId, msgSender, amount);
-  }
-
-  function withdrawErc20DepositForPeriod(uint256 _periodId)
-    external
-    onlyStopped
-  {
-    Period storage p = periods[_periodId];
-    address payable msgSender = msg.sender;
-
-    require(
-      p.userEthPayoutClaimed[msgSender] == false,
-      "ERC20Auction: ETH reward was already claimed"
-    );
-
-    require(
-      p.userErc20DepositWithdrawn[msgSender] == false,
-      "ERC20Auction: ERC20 deposit was already withdrawn"
-    );
-
-    uint256 amount = p.userErc20Deposit[msgSender];
-
-    require(amount > 0, "ERC20Auction: Missing user ERC20 deposit");
-    p.userErc20Deposit[msgSender] = 0;
-
-    // p.totalErc20Deposits -= _amount
-    p.totalErc20Deposits = p.totalErc20Deposits.sub(amount);
-
-    p.userErc20DepositWithdrawn[msgSender] = true;
-
-    erc20Token.transfer(msg.sender, amount);
-
-    emit WithdrawErc20DepositForPeriod(_periodId, msgSender, amount);
-  }
-
-  function claimErc20ForPeriod(uint256 _periodId) external notStopped {
+  function claimErc20ForPeriod(uint256 _periodId) external {
     require(
       _periodId < getCurrentPeriodId(),
       "ERC20Auction: Period not finished yet"
@@ -327,6 +334,28 @@ contract ERC20Auction is Ownable {
   {
     // return (_periodId * periodLength) + genesisTimestamp
     return (_periodId.mul(periodLength)).add(genesisTimestamp);
+  }
+
+  function canWithdrawStopped(uint256 _periodId) public view returns (bool) {
+    return (stopped == true && getCurrentPeriodId() <= _periodId);
+  }
+
+  function canWithdrawNoEthDeposit(uint256 _periodId)
+    public
+    view
+    returns (bool)
+  {
+    return (periods[_periodId].totalEthDeposits == 0 &&
+      getCurrentPeriodId() > _periodId);
+  }
+
+  function canWithdrawNoErc20Deposit(uint256 _periodId)
+    public
+    view
+    returns (bool)
+  {
+    return (periods[_periodId].totalErc20Deposits == 0 &&
+      getCurrentPeriodId() > _periodId);
   }
 
   function calculateWithdrawalFee(uint256 _amount)
@@ -398,7 +427,7 @@ contract ERC20Auction is Ownable {
   }
 
   // TODO: add forPeriod suffix
-  function getUserEthDeposit(uint256 _periodId, address _user)
+  function getUserEthDepositForPeriod(uint256 _periodId, address _user)
     external
     view
     returns (uint256)
@@ -406,7 +435,7 @@ contract ERC20Auction is Ownable {
     return periods[_periodId].userEthDeposit[_user];
   }
 
-  function getUserErc20Deposit(uint256 _periodId, address _user)
+  function getUserErc20DepositForPeriod(uint256 _periodId, address _user)
     external
     view
     returns (uint256)
