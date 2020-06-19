@@ -210,6 +210,16 @@ describe('ERC20Auction', () => {
         assert.equal(res.totalErc20Deposits, 0);
       });
 
+      it('should allow depositing 0 value', async function () {
+        await increaseTime(periodLength * 2);
+
+        assert.equal(await auction.getCurrentPeriodId(), 1);
+        await assertRevert(
+          auction.depositEthForPeriod(3, { value: 0, from: alice }),
+          'ERC20Auction: Missing a deposit'
+        );
+      });
+
       it('should deny depositing for previous periods', async function () {
         await increaseTime(periodLength * 2);
 
@@ -327,6 +337,11 @@ describe('ERC20Auction', () => {
 
       it('should deny depositing along with ETHs', async function () {
         await assertRevert(auction.depositErc20ForPeriod(3, ether(8), { value: 1, from: alice }));
+      });
+
+      it('should deny depositing 0 value', async function () {
+        await increaseTime(periodLength * 2);
+        await assertRevert(auction.depositErc20ForPeriod(3, 0, { from: alice }), 'ERC20Auction: Missing a deposit');
       });
 
       it('should deny depositing for previous periods', async function () {

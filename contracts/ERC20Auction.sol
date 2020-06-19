@@ -143,6 +143,8 @@ contract ERC20Auction is Ownable {
     uint256 amount = msg.value;
     address msgSender = msg.sender;
 
+    require(msg.value > 0, "ERC20Auction: Missing a deposit");
+
     // p.userEthDeposit[msgSender] += amount
     p.userEthDeposit[msgSender] = p.userEthDeposit[msgSender].add(amount);
     // p.totalEthDeposits += amount
@@ -170,6 +172,8 @@ contract ERC20Auction is Ownable {
 
     Period storage p = periods[_periodId];
     address msgSender = msg.sender;
+
+    require(_amount > 0, "ERC20Auction: Missing a deposit");
 
     // p.userErc20Deposit[msgSender] += _amount
     p.userErc20Deposit[msgSender] = p.userErc20Deposit[msgSender].add(_amount);
@@ -426,7 +430,6 @@ contract ERC20Auction is Ownable {
     return periods[_periodId].totalErc20Deposits;
   }
 
-  // TODO: add forPeriod suffix
   function getUserEthDepositForPeriod(uint256 _periodId, address _user)
     external
     view
