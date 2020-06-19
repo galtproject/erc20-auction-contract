@@ -441,6 +441,32 @@ describe('ERC20Auction', () => {
         assertErc20BalanceIncreased(ownerRewardBefore, ownerRewardAfter, expectedFee);
       });
 
+      it('should not charge 0 fee', async function () {
+        auction = await ERC20Auction.new(genesisTimestamp, periodLength, 0, token.address, { from: owner });
+        await token.approve(auction.address, ether(12), { from: alice });
+        await auction.depositErc20ForPeriod(2, ether(12), { from: alice });
+        await auction.depositEthForPeriod(2, { value: ether(24), from: bob });
+        await increaseTime(periodLength);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        const expectedGross = new BN(ether(24));
+
+        const detailed = await auction.calculateEthReturn(2, alice);
+        assert.equal(detailed.fee, 0);
+        assert.equal(detailed.net, expectedGross);
+        assert.equal(await auction.calculateGrossEthReturn(2, alice), expectedGross);
+
+        const aliceBalanceBefore = await web3.eth.getBalance(alice);
+        const ownerRewardBefore = await auction.ownerEthReward();
+        await auction.claimEthForPeriod(2, { from: alice });
+        const aliceBalanceAfter = await web3.eth.getBalance(alice);
+        const ownerRewardAfter = await auction.ownerEthReward();
+
+        assertEthBalanceIncreased(aliceBalanceBefore, aliceBalanceAfter, expectedGross);
+        // erc20 assertion since the increment is precise
+        assertErc20BalanceIncreased(ownerRewardBefore, ownerRewardAfter, '0');
+      });
+
       it('should deny a user with ERC20 deposit claiming a reward for the current period', async function () {
         assert.equal(await auction.getCurrentPeriodId(), 2);
 
@@ -518,6 +544,33 @@ describe('ERC20Auction', () => {
 
         assertErc20BalanceIncreased(aliceBalanceBefore, aliceBalanceAfter, expectedNet);
         assertErc20BalanceIncreased(ownerRewardBefore, ownerRewardAfter, expectedFee);
+      });
+
+      it('should not charge 0 fee', async function () {
+        auction = await ERC20Auction.new(genesisTimestamp, periodLength, 0, token.address, { from: owner });
+
+        await auction.depositEthForPeriod(2, { value: ether(24), from: alice });
+        await token.approve(auction.address, ether(12), { from: bob });
+        await auction.depositErc20ForPeriod(2, ether(12), { from: bob });
+
+        await increaseTime(periodLength);
+        assert.equal(await auction.getCurrentPeriodId(), 3);
+
+        const expectedGross = new BN(ether(12));
+
+        const detailed = await auction.calculateErc20Return(2, alice);
+        assert.equal(detailed.fee, 0);
+        assert.equal(detailed.net, expectedGross);
+        assert.equal(await auction.calculateGrossErc20Return(2, alice), expectedGross);
+
+        const aliceBalanceBefore = await token.balanceOf(alice);
+        const ownerRewardBefore = await auction.ownerErc20Reward();
+        await auction.claimErc20ForPeriod(2, { from: alice });
+        const aliceBalanceAfter = await token.balanceOf(alice);
+        const ownerRewardAfter = await auction.ownerErc20Reward();
+
+        assertErc20BalanceIncreased(aliceBalanceBefore, aliceBalanceAfter, expectedGross);
+        assertErc20BalanceIncreased(ownerRewardBefore, ownerRewardAfter, '0');
       });
 
       it('should deny a user with ETH deposit claiming a reward for the current period', async function () {
