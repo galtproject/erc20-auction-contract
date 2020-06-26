@@ -185,7 +185,7 @@ contract ERC20Auction is Ownable {
     erc20Token.transferFrom(msgSender, address(this), _amount);
   }
 
-  function depositErc20(uint256 _amount) external payable {
+  function depositErc20(uint256 _amount) external {
     depositErc20ForPeriod(getCurrentPeriodId(), _amount);
   }
 
