@@ -9,7 +9,7 @@
     "@galtproject/eslint-config-galt": "github:galtproject/eslint-config-galt#712a884caf302c7a73f777db31ff9d25f7ec79a9",
     "@galtproject/solidity-test-chest": "https://github.com/galtproject/solidity-test-chest#46d6bc2a189ab0336ab4e08fceae1b06ffa17004",
     "@openzeppelin/contract-loader": "^0.6.1",
-    "@openzeppelin/contracts": "2.5.1",
+    "@openzeppelin/contracts": "4.7.2",
     "@openzeppelin/test-environment": "^0.1.4",
     "@truffle/debug-utils": "^4.1.6",
     "chai": "^4.2.0",
